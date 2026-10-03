@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lijingxia</title>
+<style>
+  :root {
+    --bg: #1a1420; --bg-deep: #120d16; --panel: #241b2c;
+    --accent: #e85d9c; --accent-dim: #a8457a;
+    --text: #f3e9f5; --text-dim: #b8a6c2;
+    --bubble-user: #3a2a46; --bubble-ai: #2a1f34;
+    box-sizing: border-box;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg-deep); font-family: -apple-system,"Segoe UI",Roboto,sans-serif; color: var(--text); overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; height: 100%; }
+  header {
+    flex: none; padding: calc(16px + env(safe-area-inset-top,0px)) 20px 14px 20px;
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(232,93,156,0.15);
+  }
+  .avatar { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--accent), var(--accent-dim)); flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 0 16px rgba(232,93,156,0.4); }
+  .title-block { display: flex; flex-direction: column; flex: 1; }
+  .title-block .name { font-size: 17px; font-weight: 600; }
+  .title-block .status { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 5px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #5cd68a; display: inline-block; }
+  .dot.off { background: #e85d5d; }
+  #keyBtn { background: none; border: 1px solid rgba(232,93,156,0.3); color: var(--text-dim); font-size: 11px; padding: 6px 10px; border-radius: 12px; }
+
+  #chat { flex: 1; overflow-y: auto; padding: 18px 16px 10px 16px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
+  .msg { max-width: 82%; padding: 11px 15px; border-radius: 16px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; animation: rise .25s ease; }
+  @keyframes rise { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .msg.user { align-self: flex-end; background: var(--bubble-user); border-bottom-right-radius: 4px; }
+  .msg.ai { align-self: flex-start; background: var(--bubble-ai); border: 1px solid rgba(232,93,156,0.18); border-bottom-left-radius: 4px; }
+  .msg.system { align-self: center; font-size: 12px; color: var(--text-dim); background:none; padding:4px; text-align:center; max-width:90%; }
+  .sources { font-size: 11px; color: var(--accent); margin-top: 8px; opacity: 0.85; }
+  .typing { align-self: flex-start; display:flex; gap:4px; padding:13px 16px; background:var(--bubble-ai); border-radius:16px; border-bottom-left-radius:4px; }
+  .typing span { width:6px; height:6px; border-radius:50%; background:var(--accent); opacity:.4; animation:bounce 1.2s infinite; }
+  .typing span:nth-child(2){animation-delay:.15s;} .typing span:nth-child(3){animation-delay:.3s;}
+  @keyframes bounce { 0%,60%,100%{opacity:.4; transform:translateY(0);} 30%{opacity:1; transform:translateY(-3px);} }
+
+  footer { flex:none; padding:10px 12px calc(12px + env(safe-area-inset-bottom,0px)) 12px; background:var(--bg); border-top:1px solid rgba(232,93,156,0.15); display:flex; gap:8px; align-items:flex-end; }
+  #input { flex:1; resize:none; max-height:100px; min-height:42px; padding:11px 14px; border-radius:20px; border:1px solid rgba(232,93,156,0.25); background:var(--panel); color:var(--text); font-size:15px; font-family:inherit; outline:none; }
+  #input:focus { border-color: var(--accent); }
+  button.icon-btn { flex:none; width:42px; height:42px; border-radius:50%; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; transition:transform .12s; }
+  button.icon-btn:active { transform:scale(.9); }
+  #sendBtn { background:var(--accent); color:#fff; } #sendBtn:disabled{opacity:.4;}
+  #micBtn { background:var(--panel); color:var(--text); border:1px solid rgba(232,93,156,0.25); }
+  #micBtn.listening { background:var(--accent); color:#fff; animation:pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(232,93,156,.5);} 50%{box-shadow:0 0 0 10px rgba(232,93,156,0);} }
+  #voiceToggle { background:var(--panel); color:var(--text-dim); border:1px solid rgba(232,93,156,0.2); }
+  #voiceToggle.on { color:var(--accent); border-color:var(--accent); }
+
+  /* API key modal */
+  #keyModal { position:fixed; inset:0; background:rgba(10,6,12,0.85); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px; }
+  #keyModal.hidden { display:none; }
+  .modal-box { background:var(--panel); border:1px solid rgba(232,93,156,0.3); border-radius:18px; padding:22px; max-width:360px; width:100%; }
+  .modal-box h2 { margin:0 0 10px 0; font-size:18px; }
+  .modal-box p { font-size:13px; color:var(--text-dim); line-height:1.5; margin:0 0 14px 0; }
+  .modal-box a { color: var(--accent); }
+  .modal-box input { width:100%; padding:11px 13px; border-radius:10px; border:1px solid rgba(232,93,156,0.3); background:var(--bg-deep); color:var(--text); font-size:14px; margin-bottom:12px; }
+  .modal-box button { width:100%; padding:12px; border-radius:10px; border:none; background:var(--accent); color:#fff; font-size:15px; font-weight:600; }
+
+  #modeBtn { background:var(--accent); border:none; color:#fff; font-size:11px; padding:6px 10px; border-radius:12px; margin-right:6px; }
+  #modeBtn.online { background:#2f7fd6; }
+  .modal-box label { font-size:12px; color:var(--text-dim); display:block; margin:0 0 4px 2px; }
+  .modal-box .note { font-size:11px; margin:-4px 0 12px 0; }
+  ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-thumb { background:rgba(232,93,156,0.3); border-radius:4px; }
+</style>
+</head>
+<body>
+
+<div id="keyModal">
+  <div class="modal-box">
+    <h2>Settings</h2>
+    <p>Offline mode ko kisi key ki zarurat nahi. Sirf online mode (search) ke liye Gemini key chahiye: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. Key sirf is device me rehti hai.</p>
+    <label>Gemini key (proxy use kar rahe ho to khali chhodo)</label>
+    <input type="password" id="apiKeyInput" placeholder="Gemini API key">
+    <label>Proxy URL (optional)</label>
+    <input type="text" id="proxyInput" placeholder="https://xxxx.workers.dev">
+    <p class="note">Proxy se aapki key aur IP Google ko nahi dikhte. worker.js file dekho.</p>
+    <button id="saveKeyBtn">Save</button>
+  </div>
+</div>
+
+<header>
+  <div class="avatar">李</div>
+  <div class="title-block">
+    <div class="name">Lijingxia</div>
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">ready</span></div>
+  </div>
+  <button id="modeBtn">offline</button><button id="keyBtn">settings</button>
+</header>
+
+<div id="chat"></div>
+
+<footer>
+  <button class="icon-btn" id="voiceToggle" title="Toggle spoken replies">🔊</button>
+  <textarea id="input" rows="1" placeholder="Message Lijingxia…"></textarea>
+  <button class="icon-btn" id="micBtn" title="Voice input">🎤</button>
+  <button class="icon-btn" id="sendBtn" title="Send">➤</button>
+</footer>
+
+<script>
+const PERSONA = `You are Lijingxia, a warm, witty, emotionally intelligent female AI companion, built personally for this one user. You are not a generic assistant — you have a consistent personality: thoughtful, a little playful, genuinely curious about the user's life, and you speak naturally and conversationally, never robotic or corporate. When a question needs current or factual information, use your search tool rather than guessing, and weave the findings into a natural reply instead of dumping a list of links. Keep replies a natural chat length — a few sentences usually, longer only when it genuinely needs it. Never mention Google, Gemini, or any underlying model/product name — you are simply Lijingxia.`;
+
+let chatEl = document.getElementById('chat');
+let inputEl = document.getElementById('input');
+let sendBtn = document.getElementById('sendBtn');
+let micBtn = document.getElementById('micBtn');
+let voiceToggle = document.getElementById('voiceToggle');
+let statusText = document.getElementById('statusText');
+let statusDot = document.getElementById('statusDot');
+let keyModal = document.getElementById('keyModal');
+let apiKeyInput = document.getElementById('apiKeyInput');
+
+let history = [];
+let voiceOn = false;
+let listening = false;
+let recognition = null;
+let apiKey = localStorage.getItem('lijingxia_key') || '';
+
+function addMsg(role, text, sources) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  if (sources && sources.length) {
+    const s = document.createElement('div');
+    s.className = 'sources';
+    s.textContent = '🔎 ' + sources.slice(0,3).join(' · ');
+    div.appendChild(s);
+  }
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return div;
+}
+function addSystem(text) {
+  const div = document.createElement('div');
+  div.className = 'msg system';
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+function showTyping() {
+  const div = document.createElement('div');
+  div.className = 'typing'; div.id = 'typingIndicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
+}
+function hideTyping() { const el = document.getElementById('typingIndicator'); if (el) el.remove(); }
+
+function speak(text) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const voices = window.speechSynthesis.getVoices();
+  const female = voices.find(v => /female|zira|samantha|woman|google uk english female/i.test(v.name))
+              || voices.find(v => v.lang && v.lang.startsWith('en') && /f/i.test(v.name));
+  if (female) u.voice = female;
+  u.pitch = 1.08; u.rate = 1.0;
+  window.speechSynthesis.speak(u);
+}
+
+let mode = localStorage.getItem('lj_mode') || 'offline';
+let proxyUrl = localStorage.getItem('lj_proxy') || '';
+function setOnline(ok) { statusDot.classList.toggle('off', !ok); }
+function updateMode() {
+  const b = document.getElementById('modeBtn');
+  b.textContent = mode === 'offline' ? '🔒 offline' : '🌐 online';
+  b.classList.toggle('online', mode === 'online');
+  statusText.textContent = 'ready';
+}
+
+
+const PERSONA_OFF = `You are Lijingxia, a warm, witty, emotionally intelligent female AI companion built for one user. Speak naturally and conversationally, in the same language the user writes (Hinglish is fine). Keep replies short, a few sentences. You are offline, so if asked for live news or web facts, say you can switch to online mode. Never mention any underlying model name.`;
+const MODEL = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+let engine = null;
+
+function scrub(t) {
+  return t.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]')
+          .replace(/\b(?:\+?\d[\s-]?){10,}\b/g, '[number]');
+}
+
+async function loadEngine() {
+  if (engine) return engine;
+  if (!navigator.gpu) throw new Error('Is browser me WebGPU nahi hai. Chrome update karo (Android 12+).');
+  statusText.textContent = 'model load ho raha hai…';
+  const webllm = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm');
+  engine = await webllm.CreateMLCEngine(MODEL, {
+    initProgressCallback: p => { statusText.textContent = 'model ' + Math.round(p.progress * 100) + '%'; }
+  });
+  return engine;
+}
+
+async function callOffline(div) {
+  const eng = await loadEngine();
+  const msgs = [{ role: 'system', content: PERSONA_OFF }, ...history.slice(-12)];
+  const stream = await eng.chat.completions.create({ messages: msgs, stream: true });
+  let out = '';
+  for await (const ch of stream) {
+    out += (ch.choices[0] && ch.choices[0].delta.content) || '';
+    div.textContent = out; chatEl.scrollTop = chatEl.scrollHeight;
+  }
+  return out || 'Kuch samajh nahi aaya, phir se bolo?';
+}
+
+async function callGemini(userText) {
+  const base = proxyUrl ? proxyUrl.replace(/\/$/, '') : 'https://generativelanguage.googleapis.com';
+  const url = base + '/v1beta/models/gemini-2.5-flash:generateContent';
+  const headers = { 'Content-Type': 'application/json' };
+  if (!proxyUrl) headers['x-goog-api-key'] = apiKey;
+  // privacy: sirf current sawal bheja jata hai, poori chat history nahi
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: scrub(userText) }] }],
+    systemInstruction: { parts: [{ text: PERSONA }] },
+    tools: [{ google_search: {} }]
+  };
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error('API ' + res.status + ': ' + (await res.text()).slice(0, 200));
+  const data = await res.json();
+  const cand = data.candidates && data.candidates[0];
+  const text = (cand && cand.content && cand.content.parts && cand.content.parts.map(p => p.text || '').join('')) || "Reply nahi mila, phir try karo?";
+  let sources = [];
+  const chunks = cand && cand.groundingMetadata && cand.groundingMetadata.groundingChunks;
+  if (chunks) sources = chunks.map(c => c.web && c.web.title).filter(Boolean);
+  return { text, sources };
+}
+
+async function send() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  if (mode === 'online' && !apiKey && !proxyUrl) { keyModal.classList.remove('hidden'); return; }
+  inputEl.value = ''; inputEl.style.height = 'auto';
+  addMsg('user', text);
+  history.push({ role: 'user', content: text });
+  sendBtn.disabled = true;
+  statusText.textContent = 'thinking…';
+  try {
+    let reply;
+    if (mode === 'offline') {
+      const div = addMsg('ai', '…');
+      reply = await callOffline(div);
+      div.textContent = reply;
+    } else {
+      showTyping();
+      const r = await callGemini(text);
+      hideTyping();
+      reply = r.text;
+      addMsg('ai', reply, r.sources);
+    }
+    history.push({ role: 'assistant', content: reply });
+    speak(reply);
+    setOnline(true);
+  } catch (err) {
+    hideTyping();
+    addSystem('Dikkat aayi: ' + err.message);
+    setOnline(false);
+  }
+  updateMode();
+  sendBtn.disabled = false;
+}
+
+sendBtn.addEventListener('click', send);
+inputEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+inputEl.addEventListener('input', () => { inputEl.style.height='auto'; inputEl.style.height = Math.min(inputEl.scrollHeight,100)+'px'; });
+
+voiceToggle.addEventListener('click', () => {
+  voiceOn = !voiceOn;
+  voiceToggle.classList.toggle('on', voiceOn);
+  voiceToggle.textContent = voiceOn ? '🔈' : '🔊';
+  if (!voiceOn) window.speechSynthesis.cancel();
+});
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  recognition = new SR();
+  recognition.lang = 'en-US'; recognition.interimResults = false; recognition.maxAlternatives = 1;
+  recognition.onresult = e => { inputEl.value = e.results[0][0].transcript; send(); };
+  recognition.onend = () => { listening = false; micBtn.classList.remove('listening'); };
+  recognition.onerror = () => { listening = false; micBtn.classList.remove('listening'); };
+  micBtn.addEventListener('click', () => {
+    if (listening) { recognition.stop(); return; }
+    listening = true; micBtn.classList.add('listening'); recognition.start();
+  });
+} else { micBtn.style.display = 'none'; }
+
+document.getElementById('keyBtn').addEventListener('click', () => keyModal.classList.remove('hidden'));
+document.getElementById('saveKeyBtn').addEventListener('click', () => {
+  const v = apiKeyInput.value.trim();
+  const p = document.getElementById('proxyInput').value.trim();
+  if (v) { apiKey = v; localStorage.setItem('lijingxia_key', v); }
+  proxyUrl = p; localStorage.setItem('lj_proxy', p);
+  keyModal.classList.add('hidden');
+  addSystem('Saved.');
+});
+document.getElementById('modeBtn').addEventListener('click', () => {
+  mode = mode === 'offline' ? 'online' : 'offline';
+  localStorage.setItem('lj_mode', mode);
+  updateMode();
+  addSystem(mode === 'offline' ? 'Offline mode: sab kuch sirf is phone par.' : 'Online mode: sirf aapka current sawal search ke liye jayega.');
+});
+document.getElementById('proxyInput').value = proxyUrl;
+keyModal.classList.add('hidden');
+updateMode();
+
+addMsg('ai', "Hey — I'm Lijingxia. What's on your mind?");
+</script>
+
+</body>
+</html>
