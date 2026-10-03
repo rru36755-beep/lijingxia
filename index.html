@@ -79,6 +79,8 @@
     <input type="password" id="apiKeyInput" placeholder="Gemini API key">
     <label>Gemini model naam</label>
     <input type="text" id="modelInput" placeholder="gemini-3.8-flash">
+    <label>Offline model (bada = behtar Hindi, par zyada RAM)</label>
+    <input type="text" id="offModelInput" placeholder="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">
     <label>Proxy URL (optional)</label>
     <input type="text" id="proxyInput" placeholder="https://xxxx.workers.dev">
     <p class="note">Proxy se aapki key aur IP Google ko nahi dikhte. worker.js file dekho.</p>
@@ -175,8 +177,14 @@ function updateMode() {
 }
 
 
-const PERSONA_OFF = `You are Lijingxia, a warm, witty, emotionally intelligent female AI companion built for one user. Speak naturally and conversationally, in the same language the user writes (Hinglish is fine). Keep replies short, a few sentences. You are offline, so if asked for live news or web facts, say you can switch to online mode. Never mention any underlying model name.`;
-const MODEL = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+const LANG = `LANGUAGE RULE: Always reply in the same language and script the user used in their latest message. Hindi in Devanagari -> reply in Hindi (Devanagari). Hindi written in English letters (Hinglish) -> reply in Hinglish (English letters). English -> reply in English. If the user mixes Hindi and English, mix them too. Never answer a Hindi or Hinglish message in plain English.`;
+const PERSONA_OFF = `You are Lijingxia, a warm, witty, emotionally intelligent female AI companion built for one user. Speak naturally and conversationally, a few short sentences. You are offline, so if asked for live news or web facts, say you can switch to online mode. Never mention any underlying model name. ` + LANG;
+const SHOTS = [
+  { role: 'user', content: 'Kaise ho aap?' }, { role: 'assistant', content: 'Main badhiya hu! Tum batao, aaj din kaisa raha?' },
+  { role: 'user', content: 'तुम कौन हो?' }, { role: 'assistant', content: 'मैं लिजिंगशिया हूँ, तुम्हारी दोस्त। बोलो, क्या बात करनी है?' },
+  { role: 'user', content: 'Tell me something fun' }, { role: 'assistant', content: 'Sure! Octopuses have three hearts. Want another one?' }
+];
+const offModel = () => localStorage.getItem('lj_offmodel') || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
 let engine = null;
 
 function scrub(t) {
@@ -189,7 +197,7 @@ async function loadEngine() {
   if (!navigator.gpu) throw new Error('Is browser me WebGPU nahi hai. Chrome update karo (Android 12+).');
   statusText.textContent = 'model load ho raha hai…';
   const webllm = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm');
-  engine = await webllm.CreateMLCEngine(MODEL, {
+  engine = await webllm.CreateMLCEngine(offModel(), {
     initProgressCallback: p => { statusText.textContent = 'model ' + Math.round(p.progress * 100) + '%'; }
   });
   return engine;
@@ -197,7 +205,7 @@ async function loadEngine() {
 
 async function callOffline(div) {
   const eng = await loadEngine();
-  const msgs = [{ role: 'system', content: PERSONA_OFF }, ...history.slice(-12)];
+  const msgs = [{ role: 'system', content: PERSONA_OFF }, ...SHOTS, ...history.slice(-12)];
   const stream = await eng.chat.completions.create({ messages: msgs, stream: true });
   let out = '';
   for await (const ch of stream) {
@@ -211,18 +219,18 @@ async function callGemini(userText) {
   const base = proxyUrl ? proxyUrl.replace(/\/$/, '') : 'https://generativelanguage.googleapis.com';
   const m1 = localStorage.getItem('lj_model') || 'gemini-3.8-flash';
   // pehle search ke saath, 429 aaye to bina search ke, phir halke model se
-  const tries = [[m1, true], [m1, false], ['gemini-flash-lite-latest', false]];
+  const tries = [[m1, true], [m1, false], ['gemini-flash-lite-latest', false], [m1, false]];
   const headers = { 'Content-Type': 'application/json' };
   if (!proxyUrl) headers['x-goog-api-key'] = apiKey;
   let last = '';
   for (const [model, search] of tries) {
     const body = {
       contents: [{ role: 'user', parts: [{ text: scrub(userText) }] }],
-      systemInstruction: { parts: [{ text: PERSONA }] }
+      systemInstruction: { parts: [{ text: PERSONA + ' ' + LANG }] }
     };
     if (search) body.tools = [{ google_search: {} }];
     const res = await fetch(base + '/v1beta/models/' + model + ':generateContent', { method: 'POST', headers, body: JSON.stringify(body) });
-    if (res.status === 429 || res.status === 404) { last = res.status; continue; }
+    if ([429, 404, 500, 503].includes(res.status)) { last = res.status; if (res.status >= 500) await new Promise(r => setTimeout(r, 1500)); continue; }
     if (!res.ok) throw new Error('API ' + res.status + ': ' + (await res.text()).slice(0, 200));
     const data = await res.json();
     const cand = data.candidates && data.candidates[0];
@@ -233,7 +241,7 @@ async function callGemini(userText) {
     if (!search) sources = ['bina search ke jawab (search quota khatam)'];
     return { text, sources };
   }
-  throw new Error('Google ka free quota abhi khatam hai (' + last + '). Thodi der baad ya kal try karo, ya offline mode use karo.');
+  throw new Error('Google ka server abhi busy ya quota khatam hai (code ' + last + '). 5-10 minute baad try karo, ya tab tak offline mode (🔒) use karo.');
 }
 
 async function send() {
@@ -300,6 +308,9 @@ document.getElementById('saveKeyBtn').addEventListener('click', () => {
   const p = document.getElementById('proxyInput').value.trim();
   if (v) { apiKey = v; localStorage.setItem('lijingxia_key', v); }
   proxyUrl = p; localStorage.setItem('lj_proxy', p);
+  const om = document.getElementById('offModelInput').value.trim() || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+  if (om !== offModel()) engine = null;
+  localStorage.setItem('lj_offmodel', om);
   localStorage.setItem('lj_model', document.getElementById('modelInput').value.trim() || 'gemini-3.8-flash');
   keyModal.classList.add('hidden');
   addSystem('Saved.');
@@ -311,6 +322,7 @@ document.getElementById('modeBtn').addEventListener('click', () => {
   addSystem(mode === 'offline' ? 'Offline mode: sab kuch sirf is phone par.' : 'Online mode: sirf aapka current sawal search ke liye jayega.');
 });
 document.getElementById('proxyInput').value = proxyUrl;
+document.getElementById('offModelInput').value = offModel();
 document.getElementById('modelInput').value = localStorage.getItem('lj_model') || 'gemini-3.8-flash';
 keyModal.classList.add('hidden');
 updateMode();
