@@ -209,24 +209,31 @@ async function callOffline(div) {
 
 async function callGemini(userText) {
   const base = proxyUrl ? proxyUrl.replace(/\/$/, '') : 'https://generativelanguage.googleapis.com';
-  const url = base + '/v1beta/models/' + (localStorage.getItem('lj_model') || 'gemini-3.8-flash') + ':generateContent';
+  const m1 = localStorage.getItem('lj_model') || 'gemini-3.8-flash';
+  // pehle search ke saath, 429 aaye to bina search ke, phir halke model se
+  const tries = [[m1, true], [m1, false], ['gemini-flash-lite-latest', false]];
   const headers = { 'Content-Type': 'application/json' };
   if (!proxyUrl) headers['x-goog-api-key'] = apiKey;
-  // privacy: sirf current sawal bheja jata hai, poori chat history nahi
-  const body = {
-    contents: [{ role: 'user', parts: [{ text: scrub(userText) }] }],
-    systemInstruction: { parts: [{ text: PERSONA }] },
-    tools: [{ google_search: {} }]
-  };
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error('API ' + res.status + ': ' + (await res.text()).slice(0, 200));
-  const data = await res.json();
-  const cand = data.candidates && data.candidates[0];
-  const text = (cand && cand.content && cand.content.parts && cand.content.parts.map(p => p.text || '').join('')) || "Reply nahi mila, phir try karo?";
-  let sources = [];
-  const chunks = cand && cand.groundingMetadata && cand.groundingMetadata.groundingChunks;
-  if (chunks) sources = chunks.map(c => c.web && c.web.title).filter(Boolean);
-  return { text, sources };
+  let last = '';
+  for (const [model, search] of tries) {
+    const body = {
+      contents: [{ role: 'user', parts: [{ text: scrub(userText) }] }],
+      systemInstruction: { parts: [{ text: PERSONA }] }
+    };
+    if (search) body.tools = [{ google_search: {} }];
+    const res = await fetch(base + '/v1beta/models/' + model + ':generateContent', { method: 'POST', headers, body: JSON.stringify(body) });
+    if (res.status === 429 || res.status === 404) { last = res.status; continue; }
+    if (!res.ok) throw new Error('API ' + res.status + ': ' + (await res.text()).slice(0, 200));
+    const data = await res.json();
+    const cand = data.candidates && data.candidates[0];
+    let text = (cand && cand.content && cand.content.parts && cand.content.parts.map(p => p.text || '').join('')) || 'Reply nahi mila, phir try karo?';
+    let sources = [];
+    const chunks = cand && cand.groundingMetadata && cand.groundingMetadata.groundingChunks;
+    if (chunks) sources = chunks.map(c => c.web && c.web.title).filter(Boolean);
+    if (!search) sources = ['bina search ke jawab (search quota khatam)'];
+    return { text, sources };
+  }
+  throw new Error('Google ka free quota abhi khatam hai (' + last + '). Thodi der baad ya kal try karo, ya offline mode use karo.');
 }
 
 async function send() {
