@@ -77,6 +77,8 @@
     <p>Offline mode ko kisi key ki zarurat nahi. Sirf online mode (search) ke liye Gemini key chahiye: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. Key sirf is device me rehti hai.</p>
     <label>Gemini key (proxy use kar rahe ho to khali chhodo)</label>
     <input type="password" id="apiKeyInput" placeholder="Gemini API key">
+    <label>Gemini model naam</label>
+    <input type="text" id="modelInput" placeholder="gemini-3.8-flash">
     <label>Proxy URL (optional)</label>
     <input type="text" id="proxyInput" placeholder="https://xxxx.workers.dev">
     <p class="note">Proxy se aapki key aur IP Google ko nahi dikhte. worker.js file dekho.</p>
@@ -207,7 +209,7 @@ async function callOffline(div) {
 
 async function callGemini(userText) {
   const base = proxyUrl ? proxyUrl.replace(/\/$/, '') : 'https://generativelanguage.googleapis.com';
-  const url = base + '/v1beta/models/gemini-2.5-flash:generateContent';
+  const url = base + '/v1beta/models/' + (localStorage.getItem('lj_model') || 'gemini-3.8-flash') + ':generateContent';
   const headers = { 'Content-Type': 'application/json' };
   if (!proxyUrl) headers['x-goog-api-key'] = apiKey;
   // privacy: sirf current sawal bheja jata hai, poori chat history nahi
@@ -291,6 +293,7 @@ document.getElementById('saveKeyBtn').addEventListener('click', () => {
   const p = document.getElementById('proxyInput').value.trim();
   if (v) { apiKey = v; localStorage.setItem('lijingxia_key', v); }
   proxyUrl = p; localStorage.setItem('lj_proxy', p);
+  localStorage.setItem('lj_model', document.getElementById('modelInput').value.trim() || 'gemini-3.8-flash');
   keyModal.classList.add('hidden');
   addSystem('Saved.');
 });
@@ -301,6 +304,7 @@ document.getElementById('modeBtn').addEventListener('click', () => {
   addSystem(mode === 'offline' ? 'Offline mode: sab kuch sirf is phone par.' : 'Online mode: sirf aapka current sawal search ke liye jayega.');
 });
 document.getElementById('proxyInput').value = proxyUrl;
+document.getElementById('modelInput').value = localStorage.getItem('lj_model') || 'gemini-3.8-flash';
 keyModal.classList.add('hidden');
 updateMode();
 
